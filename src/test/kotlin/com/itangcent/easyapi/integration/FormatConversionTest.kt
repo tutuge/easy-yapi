@@ -4,6 +4,8 @@ import com.itangcent.easyapi.exporter.curl.CurlFormatter
 import com.itangcent.easyapi.exporter.model.*
 import com.itangcent.easyapi.exporter.postman.PostmanFormatOptions
 import com.itangcent.easyapi.exporter.postman.PostmanFormatter
+import com.itangcent.easyapi.psi.model.FieldModel
+import com.itangcent.easyapi.psi.model.ObjectModel
 import com.itangcent.easyapi.testFramework.EasyApiLightCodeInsightFixtureTestCase
 import com.itangcent.easyapi.testFramework.TestConfigReader
 import kotlinx.coroutines.runBlocking
@@ -34,6 +36,25 @@ class FormatConversionTest : EasyApiLightCodeInsightFixtureTestCase() {
             parameters = listOf(
                 ApiParameter(name = "name", binding = ParameterBinding.Body, example = "John"),
                 ApiParameter(name = "email", binding = ParameterBinding.Body, example = "john@example.com")
+            )
+        )
+    )
+
+    private val testEndpointWithResponseBody = ApiEndpoint(
+        name = "Get User",
+        description = "Retrieve user by ID",
+        metadata = httpMetadata(
+            path = "/api/users/{id}",
+            method = HttpMethod.GET,
+            parameters = listOf(
+                ApiParameter(name = "id", binding = ParameterBinding.Path, example = "1")
+            ),
+            responseBody = ObjectModel.Object(
+                fields = mapOf(
+                    "id" to FieldModel(ObjectModel.Single("long")),
+                    "name" to FieldModel(ObjectModel.Single("string")),
+                    "email" to FieldModel(ObjectModel.Single("string"))
+                )
             )
         )
     )
@@ -98,5 +119,50 @@ class FormatConversionTest : EasyApiLightCodeInsightFixtureTestCase() {
 
         val collection = postmanFormatter.format(endpoints, "CRUD API")
         assertTrue("Should have items", collection.item?.isNotEmpty() == true)
+    }
+
+    fun testPostmanResponseExampleGeneration(): Unit = runBlocking {
+        val formatterWithExample = PostmanFormatter(
+            project = project,
+            options = PostmanFormatOptions(buildExample = true, autoMergeScript = false)
+        )
+        val collectionWithExample = formatterWithExample.format(listOf(testEndpointWithResponseBody), "Test API")
+
+        assertNotNull("Collection should not be null", collectionWithExample)
+        val item = collectionWithExample.item?.firstOrNull()
+        assertNotNull("Should have at least one item", item)
+
+        val responses = item?.response
+        assertNotNull("Should have response examples when buildExample=true and responseBody exists", responses)
+        assertTrue("Should have at least one response example", responses?.isNotEmpty() == true)
+
+        val firstResponse = responses?.firstOrNull()
+        assertNotNull("First response should not be null", firstResponse)
+        assertEquals("Response status code should be 200", 200, firstResponse?.code)
+        assertTrue("Response body should contain JSON", firstResponse?.body?.isNotBlank() == true)
+
+        val formatterWithoutExample = PostmanFormatter(
+            project = project,
+            options = PostmanFormatOptions(buildExample = false, autoMergeScript = false)
+        )
+        val collectionWithoutExample = formatterWithoutExample.format(listOf(testEndpointWithResponseBody), "Test API")
+
+        val itemWithoutExample = collectionWithoutExample.item?.firstOrNull()
+        val responsesWithoutExample = itemWithoutExample?.response
+        assertTrue("Should not have response examples when buildExample=false", responsesWithoutExample?.isEmpty() != false)
+    }
+
+    fun testPostmanResponseExampleGenerationWithoutResponseBody(): Unit = runBlocking {
+        val formatter = PostmanFormatter(
+            project = project,
+            options = PostmanFormatOptions(buildExample = true, autoMergeScript = false)
+        )
+        val collection = formatter.format(listOf(testEndpoint), "Test API")
+
+        val item = collection.item?.firstOrNull()
+        assertNotNull("Should have at least one item", item)
+
+        val responses = item?.response
+        assertTrue("Should not have response examples when responseBody is null", responses?.isEmpty() != false)
     }
 }

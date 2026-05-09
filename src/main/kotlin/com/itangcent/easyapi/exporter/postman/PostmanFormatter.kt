@@ -124,11 +124,25 @@ class PostmanFormatter(
         return formatWithContext(contexts, moduleName)
     }
 
-    private fun ApiEndpoint.toContext(): PostmanEndpointContext = PostmanEndpointContext(
-        endpoint = this,
-        psiElement = this.sourceMethod ?: this.sourceClass,
-        psiClass = this.sourceClass
-    )
+    private fun ApiEndpoint.toContext(): PostmanEndpointContext {
+        val responses = if (options.buildExample) {
+            val responseBody = this.httpMetadata?.responseBody
+            if (responseBody != null) {
+                listOf(PostmanResponseData(
+                    name = "Success",
+                    statusCode = 200,
+                    body = responseBody
+                ))
+            } else emptyList()
+        } else emptyList()
+
+        return PostmanEndpointContext(
+            endpoint = this,
+            responses = responses,
+            psiElement = this.sourceMethod ?: this.sourceClass,
+            psiClass = this.sourceClass
+        )
+    }
 
     suspend fun formatWithContext(
         contexts: List<PostmanEndpointContext>,
