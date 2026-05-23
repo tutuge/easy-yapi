@@ -38,31 +38,31 @@ import kotlin.concurrent.thread
 
 /**
  * Interface for settings UI panels.
- * 
+ *
  * Provides a contract for panels that display and edit plugin settings.
  * Each panel handles a specific category of settings.
  */
 interface SettingsPanel {
     /** The UI component for this panel */
     val component: JComponent
-    
+
     /**
      * Resets the panel UI to reflect the given settings.
-     * 
+     *
      * @param settings The settings to display
      */
     fun resetFrom(settings: Settings?)
-    
+
     /**
      * Applies the panel UI values to the given settings.
-     * 
+     *
      * @param settings The settings to modify
      */
     fun applyTo(settings: Settings)
-    
+
     /**
      * Checks if the panel has unsaved changes.
-     * 
+     *
      * @param settings The current settings
      * @return true if the panel has modifications
      */
@@ -71,7 +71,7 @@ interface SettingsPanel {
 
 /**
  * General settings panel for basic plugin configuration.
- * 
+ *
  * Provides UI for:
  * - Framework support toggles (Feign, JAX-RS, Actuator)
  * - Logging level selection
@@ -94,6 +94,9 @@ class GeneralSettingsPanel(private val project: com.intellij.openapi.project.Pro
     }
     private val concurrentScanEnabled = JBCheckBox("Enable concurrent API scanning (experimental)", false).apply {
         toolTipText = "Use multiple threads for API scanning (may improve performance but is experimental)"
+    }
+    private val onlyScanSwaggerAnnotatedControllers = JBCheckBox("Only scan controllers with Swagger annotations", false).apply {
+        toolTipText = "Only scan controllers that have Swagger annotations (@Tag, @Api, etc.). Disable to scan all controllers."
     }
     private val gutterIconEnabled = JBCheckBox("Show gutter icon on API methods", true).apply {
         toolTipText = "Show a gutter icon on API methods for quick navigation to the API Dashboard. Disable if it conflicts with other plugins."
@@ -385,6 +388,7 @@ class GeneralSettingsPanel(private val project: com.intellij.openapi.project.Pro
         )
         .addComponent(autoScanEnabled)
         .addComponent(concurrentScanEnabled)
+        .addComponent(onlyScanSwaggerAnnotatedControllers)
         .addComponent(gutterIconEnabled)
         .addComponent(switchNotice)
         .addLabeledComponent("Log Level:", logLevelCombo)
@@ -402,6 +406,7 @@ class GeneralSettingsPanel(private val project: com.intellij.openapi.project.Pro
         actuatorEnable.isSelected = settings?.actuatorEnable ?: false
         autoScanEnabled.isSelected = settings?.autoScanEnabled ?: true
         concurrentScanEnabled.isSelected = settings?.concurrentScanEnabled ?: false
+        onlyScanSwaggerAnnotatedControllers.isSelected = settings?.onlyScanSwaggerAnnotatedControllers ?: false
         gutterIconEnabled.isSelected = settings?.gutterIconEnabled ?: true
         switchNotice.isSelected = settings?.switchNotice ?: true
         logLevelCombo.selectedItem = CommonSettingsHelper.VerbosityLevel.toLevel(settings?.logLevel ?: 0)
@@ -426,6 +431,7 @@ class GeneralSettingsPanel(private val project: com.intellij.openapi.project.Pro
         settings.actuatorEnable = actuatorEnable.isSelected
         settings.autoScanEnabled = autoScanEnabled.isSelected
         settings.concurrentScanEnabled = concurrentScanEnabled.isSelected
+        settings.onlyScanSwaggerAnnotatedControllers = onlyScanSwaggerAnnotatedControllers.isSelected
         settings.gutterIconEnabled = gutterIconEnabled.isSelected
         settings.switchNotice = switchNotice.isSelected
         settings.logLevel = (logLevelCombo.selectedItem as? CommonSettingsHelper.VerbosityLevel)?.level ?: 0
@@ -446,6 +452,7 @@ class GeneralSettingsPanel(private val project: com.intellij.openapi.project.Pro
                 actuatorEnable.isSelected != s.actuatorEnable ||
                 autoScanEnabled.isSelected != s.autoScanEnabled ||
                 concurrentScanEnabled.isSelected != s.concurrentScanEnabled ||
+                onlyScanSwaggerAnnotatedControllers.isSelected != s.onlyScanSwaggerAnnotatedControllers ||
                 gutterIconEnabled.isSelected != s.gutterIconEnabled ||
                 switchNotice.isSelected != s.switchNotice ||
                 (logLevelCombo.selectedItem as? CommonSettingsHelper.VerbosityLevel)?.level != s.logLevel ||

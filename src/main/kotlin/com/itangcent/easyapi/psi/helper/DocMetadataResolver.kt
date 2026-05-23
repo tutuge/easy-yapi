@@ -3,6 +3,8 @@ package com.itangcent.easyapi.psi.helper
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
+import com.intellij.psi.PsiAnnotation
+import com.intellij.psi.PsiArrayInitializerMemberValue
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiField
@@ -18,6 +20,7 @@ import com.itangcent.easyapi.rule.engine.RuleEngine
 import com.itangcent.easyapi.settings.SettingBinder
 import com.itangcent.easyapi.util.GsonUtils
 import com.itangcent.easyapi.util.appendWithDedup
+import com.itangcent.easyapi.logging.IdeaLog
 
 /**
  * Resolves documentation metadata from PSI elements using rules and doc comments.
@@ -92,12 +95,12 @@ import com.itangcent.easyapi.util.appendWithDedup
 @Service(Service.Level.PROJECT)
 class DocMetadataResolver internal constructor(
     private val project: Project
-) {
+) : IdeaLog {
     private val engine: RuleEngine get() = RuleEngine.getInstance(project)
     private val docHelper: DocHelper get() = UnifiedDocHelper.getInstance(project)
     private val settings get() = SettingBinder.getInstance(project).read()
 
-    companion object {
+    companion object : IdeaLog {
         fun getInstance(project: Project): DocMetadataResolver = project.service()
     }
     /**
@@ -127,13 +130,120 @@ class DocMetadataResolver internal constructor(
      *
      * **Applicable to**: All frameworks (SpringMVC, JAX-RS, Feign, gRPC, Actuator)
      *
-     * Resolution order: doc comment → `class.doc` rule (with dedup)
+     * Resolution order:
+     * 1. Swagger class annotations (@Tag#name, @Api#value, @ApiModel#value)
+     * 2. `class.doc` rule
+     * 3. Doc comment (with dedup from rule result)
+     * 4. Class name (fallback)
      */
     suspend fun resolveClassDoc(psiClass: PsiClass): String {
-        val docComment = docHelper.getAttrOfDocComment(psiClass)
+        val className = psiClass.qualifiedName ?: psiClass.name ?: "Unknown"
+
+        // First, try to extract from Swagger annotations on the class
+        val swaggerDesc = extractSwaggerClassDescription(psiClass)
+        if (!swaggerDesc.isNullOrBlank()) {
+            LOG.debug("[$className] Using Swagger annotation for class description: $swaggerDesc")
+            return swaggerDesc
+        }
+
+        // Then, try the class.doc rule
         val ruleClassDesc = engine.evaluate(RuleKeys.CLASS_DOC, psiClass)
-        val combined = docComment.appendWithDedup(ruleClassDesc)
-        return combined.ifBlank { psiClass.name ?: "Unknown" }
+        if (!ruleClassDesc.isNullOrBlank()) {
+            LOG.debug("[$className] Using class.doc rule for class description: $ruleClassDesc")
+            return ruleClassDesc
+        }
+
+        // Finally, fall back to doc comment
+        val docComment = docHelper.getAttrOfDocComment(psiClass)
+        val result = if (!docComment.isNullOrBlank()) docComment else (psiClass.name ?: "Unknown")
+        LOG.debug("[$className] Using doc comment/class name for class description: $result")
+        return result
+    }
+
+    /**
+     * Extracts class description from Swagger annotations.
+     *
+     * Priority:
+     * 1. @Tag#name (OpenAPI 3.x)
+     * 2. @Tags#value[].name (OpenAPI 3.x)
+     * 3. @Api#value (Swagger 2.x)
+     * 4. @Api#tags (Swagger 2.x) - takes first tag
+     * 5. @ApiModel#value (Swagger 2.x)
+     * 6. @ApiModel#description (Swagger 2.x)
+     */
+    private suspend fun extractSwaggerClassDescription(psiClass: PsiClass): String? {
+        val className = psiClass.qualifiedName ?: psiClass.name ?: "Unknown"
+
+        // Try OpenAPI 3.x @Tag annotation
+        val tagAnnotation = psiClass.getAnnotation("io.swagger.v3.oas.annotations.tags.Tag")
+        if (tagAnnotation != null) {
+            val nameAttr = tagAnnotation.findAttributeValue("name")?.text
+            if (!nameAttr.isNullOrBlank()) {
+                LOG.debug("[$className] Found @Tag(name=$nameAttr)")
+                return nameAttr
+            }
+            LOG.debug("[$className] Found @Tag but name attribute is empty")
+        }
+
+        // Try OpenAPI 3.x @Tags annotation
+        val tagsAnnotation = psiClass.getAnnotation("io.swagger.v3.oas.annotations.tags.Tags")
+        if (tagsAnnotation != null) {
+            val valueAttr = tagsAnnotation.findAttributeValue("value")
+            if (valueAttr is PsiArrayInitializerMemberValue) {
+                val firstTag = valueAttr.initializers?.firstOrNull()
+                if (firstTag is PsiAnnotation) {
+                    val nameAttr = firstTag.findAttributeValue("name")?.text
+                    if (!nameAttr.isNullOrBlank()) {
+                        LOG.debug("[$className] Found @Tags with first tag name=$nameAttr")
+                        return nameAttr
+                    }
+                }
+            }
+            LOG.debug("[$className] Found @Tags but could not extract name")
+        }
+
+        // Try Swagger 2.x @Api annotation
+        val apiAnnotation = psiClass.getAnnotation("io.swagger.annotations.Api")
+        if (apiAnnotation != null) {
+            // Try @Api#value first
+            val valueAttr = apiAnnotation.findAttributeValue("value")?.text
+            if (!valueAttr.isNullOrBlank()) {
+                LOG.debug("[$className] Found @Api(value=$valueAttr)")
+                return valueAttr
+            }
+            // Then try @Api#tags (take first tag)
+            val tagsAttr = apiAnnotation.findAttributeValue("tags")?.text
+            if (!tagsAttr.isNullOrBlank()) {
+                // tags is an array, take first element
+                val firstTag = tagsAttr.split(",").firstOrNull()?.trim()
+                if (!firstTag.isNullOrBlank()) {
+                    LOG.debug("[$className] Found @Api with first tag=$firstTag")
+                    return firstTag
+                }
+            }
+            LOG.debug("[$className] Found @Api but could not extract value/tags")
+        }
+
+        // Try Swagger 2.x @ApiModel annotation
+        val apiModelAnnotation = psiClass.getAnnotation("io.swagger.annotations.ApiModel")
+        if (apiModelAnnotation != null) {
+            // Try @ApiModel#value first
+            val valueAttr = apiModelAnnotation.findAttributeValue("value")?.text
+            if (!valueAttr.isNullOrBlank()) {
+                LOG.debug("[$className] Found @ApiModel(value=$valueAttr)")
+                return valueAttr
+            }
+            // Then try @ApiModel#description
+            val descAttr = apiModelAnnotation.findAttributeValue("description")?.text
+            if (!descAttr.isNullOrBlank()) {
+                LOG.debug("[$className] Found @ApiModel(description=$descAttr)")
+                return descAttr
+            }
+            LOG.debug("[$className] Found @ApiModel but could not extract value/description")
+        }
+
+        LOG.debug("[$className] No Swagger annotations found for class description")
+        return null
     }
 
     /**
@@ -174,6 +284,12 @@ class DocMetadataResolver internal constructor(
      * Resolves the folder/group name for an API endpoint.
      *
      * **Applicable to**: All frameworks (SpringMVC, JAX-RS, Feign, gRPC, Actuator)
+     *
+     * Resolution order:
+     * 1. `folder.name` rule on method/class
+     * 2. Swagger class annotations (@Tag#name, @Api#value)
+     * 3. Doc comment (first line)
+     * 4. Class name (fallback)
      */
     suspend fun resolveFolderName(method: PsiMethod?, psiClass: PsiClass? = null): String? {
         if (method != null) {
@@ -182,6 +298,12 @@ class DocMetadataResolver internal constructor(
         }
 
         val cls = psiClass ?: method?.containingClass ?: return null
+        // Try Swagger annotations for folder name
+        val swaggerFolder = extractSwaggerClassDescription(cls)
+        if (!swaggerFolder.isNullOrBlank()) {
+            return swaggerFolder
+        }
+
         val classFolder = engine.evaluate(RuleKeys.FOLDER_NAME, cls)
         if (!classFolder.isNullOrBlank()) return classFolder
 
@@ -240,7 +362,15 @@ class DocMetadataResolver internal constructor(
     }
 
     suspend fun resolveApiTag(method: PsiMethod): String? {
-        return engine.evaluate(RuleKeys.API_TAG, method)
+        // First try to get tag from method level
+        val methodTag = engine.evaluate(RuleKeys.API_TAG, method)
+        if (!methodTag.isNullOrBlank()) {
+            return methodTag
+        }
+
+        // If no tag at method level, try to get tag from class level
+        val containingClass = method.containingClass ?: return null
+        return engine.evaluate(RuleKeys.API_TAG, containingClass)
     }
 
     suspend fun resolveApiStatus(method: PsiMethod): String? {
@@ -250,7 +380,7 @@ class DocMetadataResolver internal constructor(
     suspend fun isApiOpen(method: PsiMethod): Boolean {
         return engine.evaluate(RuleKeys.API_OPEN, method)
     }
-    
+
     suspend fun resolveYapiProject(method: PsiMethod): String? {
         return engine.evaluate(RuleKeys.YAPI_PROJECT, method)
     }

@@ -76,6 +76,8 @@ interface ApplicationSettingsSupport {
     /** When true, show gutter icon on API methods for opening in API Dashboard */
     var gutterIconEnabled: Boolean
     var globalEnvironments: String
+    /** When true, only scan controllers that have Swagger annotations (e.g., @Tag, @Api) */
+    var onlyScanSwaggerAnnotatedControllers: Boolean
 
     fun copyTo(newSetting: ApplicationSettingsSupport) {
         newSetting.postmanToken = this.postmanToken
@@ -115,6 +117,7 @@ interface ApplicationSettingsSupport {
         newSetting.concurrentScanEnabled = this.concurrentScanEnabled
         newSetting.gutterIconEnabled = this.gutterIconEnabled
         newSetting.globalEnvironments = this.globalEnvironments
+        newSetting.onlyScanSwaggerAnnotatedControllers = this.onlyScanSwaggerAnnotatedControllers
     }
 }
 

@@ -63,7 +63,8 @@ data class Settings(
     override var concurrentScanEnabled: Boolean = false,
     override var gutterIconEnabled: Boolean = true,
     override var projectEnvironments: String = "",
-    override var globalEnvironments: String = ""
+    override var globalEnvironments: String = "",
+    override var onlyScanSwaggerAnnotatedControllers: Boolean = false
 ) : ProjectSettingsSupport, ApplicationSettingsSupport {
 
     companion object {

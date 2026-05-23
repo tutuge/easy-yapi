@@ -24,7 +24,7 @@ class CompositeApiClassRecognizer(private val project: Project) {
     private val recognizers: List<ApiClassRecognizer> by lazy {
         val settings = SettingBinder.getInstance(project).read()
         buildList {
-            add(SpringControllerRecognizer())
+            add(SpringControllerRecognizer(settings = settings))
             if (settings.jaxrsEnable) {
                 add(JaxRsResourceRecognizer(enabled = true))
             }

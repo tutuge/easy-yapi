@@ -177,8 +177,14 @@ class ApiScanner(private val project: Project) {
             }
         }
 
-        LOG.info("Total controller classes found: ${controllerClasses.size}")
-        return controllerClasses.toList()
+        // Filter the results based on the actual isApiClass check
+        // This handles additional filtering logic like onlyScanSwaggerAnnotatedControllers
+        val filteredClasses = controllerClasses.filter { psiClass ->
+            read { apiClassRecognizer.isApiClass(psiClass) }
+        }
+
+        LOG.info("Total controller classes found: ${controllerClasses.size}, after filtering: ${filteredClasses.size}")
+        return filteredClasses
     }
 
     /**
