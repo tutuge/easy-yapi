@@ -9,13 +9,13 @@ import com.itangcent.easyapi.exporter.EndpointBuilder
 import com.itangcent.easyapi.exporter.model.ApiEndpoint
 import com.itangcent.easyapi.exporter.model.GrpcMetadata
 import com.itangcent.easyapi.logging.IdeaLog
-import com.itangcent.easyapi.psi.helper.ApiMetadataResolver
-import com.itangcent.easyapi.psi.helper.DocHelper
-import com.itangcent.easyapi.psi.helper.UnifiedDocHelper
+import com.itangcent.easyapi.psi.helper.DocMetadataResolver
 import com.itangcent.easyapi.psi.model.ObjectModel
 import com.itangcent.easyapi.psi.type.TypeResolver
 import com.itangcent.easyapi.rule.RuleKeys
 import com.itangcent.easyapi.rule.engine.RuleEngine
+import com.itangcent.easyapi.settings.SettingBinder
+import com.itangcent.easyapi.util.ide.ProjectClassAvailabilityService
 
 /**
  * Exports API endpoints from gRPC service implementation classes.
@@ -40,9 +40,16 @@ class GrpcClassExporter(
 
     override val frameworkName: String = "gRPC"
 
+    override suspend fun isEnabled(): Boolean {
+        val settings = SettingBinder.getInstance(project).read()
+        val availabilityService = ProjectClassAvailabilityService.getInstance(project)
+        return settings.grpcEnable &&
+                (availabilityService.hasAnyClassInProject(GrpcServiceRecognizer.GRPC_SERVICE_ANNOTATIONS) ||
+                        availabilityService.hasClassInProject(GrpcServiceRecognizer.BINDABLE_SERVICE_FQN))
+    }
+
     private val engine = RuleEngine.getInstance(project)
-    private val docHelper: DocHelper = UnifiedDocHelper.getInstance(project)
-    private val metadataResolver = ApiMetadataResolver(engine, docHelper)
+    private val metadataResolver = DocMetadataResolver.getInstance(project)
     private val endpointBuilder = EndpointBuilder.getInstance(project)
     private val recognizer = GrpcServiceRecognizer(engine)
     private val methodResolver = GrpcMethodResolver.getInstance(project)

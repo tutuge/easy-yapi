@@ -12,16 +12,17 @@ import com.itangcent.easyapi.exporter.model.*
 import com.itangcent.easyapi.exporter.springmvc.RequestMappingResolver
 import com.itangcent.easyapi.exporter.springmvc.SpringParameterBindingResolver
 import com.itangcent.easyapi.logging.IdeaLog
-import com.itangcent.easyapi.psi.helper.ApiMetadataResolver
+import com.itangcent.easyapi.psi.helper.DocMetadataResolver
 import com.itangcent.easyapi.psi.helper.UnifiedAnnotationHelper
-import com.itangcent.easyapi.psi.helper.UnifiedDocHelper
 import com.itangcent.easyapi.psi.model.ObjectModel
 import com.itangcent.easyapi.psi.type.ResolvedMethod
 import com.itangcent.easyapi.psi.type.ResolvedType
 import com.itangcent.easyapi.psi.type.TypeResolver
 import com.itangcent.easyapi.rule.RuleKeys
 import com.itangcent.easyapi.rule.engine.RuleEngine
+import com.itangcent.easyapi.settings.SettingBinder
 import com.itangcent.easyapi.util.PathVariablePattern
+import com.itangcent.easyapi.util.ide.ProjectClassAvailabilityService
 import kotlinx.coroutines.withContext
 
 /**
@@ -50,21 +51,26 @@ import kotlinx.coroutines.withContext
  * @see NativeFeignAnnotationParser for native Feign annotation parsing
  */
 class FeignClassExporter(
-    private val project: Project,
-    feignEnable: Boolean = true
+    private val project: Project
 ) : ClassExporter {
 
     override val frameworkName: String = "Feign"
 
+    override suspend fun isEnabled(): Boolean {
+        val settings = SettingBinder.getInstance(project).read()
+        val availabilityService = ProjectClassAvailabilityService.getInstance(project)
+        return settings.feignEnable &&
+                availabilityService.hasAnyClassInProject(FeignClientRecognizer.FEIGN_ANNOTATIONS)
+    }
+
     private val annotationHelper = UnifiedAnnotationHelper()
     private val engine = RuleEngine.getInstance(project)
-    private val recognizer = FeignClientRecognizer(engine, feignEnable)
+    private val recognizer = FeignClientRecognizer(engine)
     private val pathResolver = FeignPathResolver(annotationHelper)
     private val nativeParser = NativeFeignAnnotationParser(annotationHelper)
     private val springMappingResolver = RequestMappingResolver(annotationHelper, engine)
     private val springParamResolver = SpringParameterBindingResolver(annotationHelper, engine)
-    private val docHelper = UnifiedDocHelper.getInstance(project)
-    private val metadataResolver = ApiMetadataResolver(engine, docHelper)
+    private val metadataResolver = DocMetadataResolver.getInstance(project)
     private val endpointBuilder = EndpointBuilder.getInstance(project)
 
     override suspend fun export(psiClass: PsiClass): List<ApiEndpoint> {

@@ -1,5 +1,6 @@
 package com.itangcent.easyapi.exporter.springmvc
 
+import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiMethod
 import com.intellij.psi.PsiParameter
@@ -7,7 +8,7 @@ import com.intellij.psi.util.PsiTypesUtil
 import com.itangcent.easyapi.core.threading.read
 import com.itangcent.easyapi.exporter.EndpointBuilder
 import com.itangcent.easyapi.exporter.model.*
-import com.itangcent.easyapi.psi.helper.ApiMetadataResolver
+import com.itangcent.easyapi.psi.helper.DocMetadataResolver
 import com.itangcent.easyapi.psi.model.FieldModel
 import com.itangcent.easyapi.psi.model.ObjectModel
 import com.itangcent.easyapi.psi.type.JsonType
@@ -55,9 +56,11 @@ object SpringActuatorConstants {
  * All endpoints are mapped under `/actuator/{endpointId}`.
  */
 class ActuatorEndpointScanner(
-    private val metadataResolver: ApiMetadataResolver,
+    private val project: Project,
     private val endpointBuilder: com.itangcent.easyapi.exporter.EndpointBuilder
 ) {
+
+    private val metadataResolver: DocMetadataResolver get() = DocMetadataResolver.getInstance(project)
 
     suspend fun scan(psiClass: PsiClass): List<ApiEndpoint> {
         val endpointId = findEndpointId(psiClass) ?: return emptyList()

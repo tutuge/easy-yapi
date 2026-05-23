@@ -5,6 +5,29 @@ All notable changes to the EasyAPI plugin will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.4] - 2026-05-21
+
+### Added
+-  add setting to enable/disable API method gutter icon (#1340)
+
+### Fixed
+-  resolve IntelliJ IDEA 2026.1 (IU-261) compatibility issues (#1344)
+-  leave tag as null instead of empty array when no tags exist (#1338)
+-  resolve ClassCastException on double-shift Search Everywhere (#1336) (#1337)
+
+---
+
+## [3.1.3] - 2026-05-11
+
+### Added
+-  add yapi project resolution fallback from method to class level (#1334)
+
+### Fixed
+-  DocMetadataResolver now correctly reads settings.pathMulti dynamically
+-  remove duplicated comments when combining doc comments with rule-based docs
+
+---
+
 ## [3.1.2] - 2026-05-07
 
 ### Fixed

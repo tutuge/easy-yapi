@@ -9,8 +9,7 @@ import com.itangcent.easyapi.exporter.ClassExporter
 import com.itangcent.easyapi.exporter.EndpointBuilder
 import com.itangcent.easyapi.exporter.model.*
 import com.itangcent.easyapi.logging.IdeaLog
-import com.itangcent.easyapi.psi.helper.ApiMetadataResolver
-import com.itangcent.easyapi.psi.helper.UnifiedDocHelper
+import com.itangcent.easyapi.psi.helper.DocMetadataResolver
 import com.itangcent.easyapi.psi.helper.UnifiedAnnotationHelper
 import com.itangcent.easyapi.psi.model.ObjectModel
 import com.itangcent.easyapi.psi.type.ResolvedType
@@ -18,6 +17,8 @@ import com.itangcent.easyapi.psi.type.TypeResolver
 import com.itangcent.easyapi.psi.type.searchAnnotation
 import com.itangcent.easyapi.rule.RuleKeys
 import com.itangcent.easyapi.rule.engine.RuleEngine
+import com.itangcent.easyapi.settings.SettingBinder
+import com.itangcent.easyapi.util.ide.ProjectClassAvailabilityService
 import kotlinx.coroutines.withContext
 
 /**
@@ -46,21 +47,26 @@ import kotlinx.coroutines.withContext
  * @see JaxRsParameterResolver for parameter resolution
  */
 class JaxRsClassExporter(
-    private val project: Project,
-    jaxrsEnable: Boolean = true
+    private val project: Project
 ) : ClassExporter {
 
     override val frameworkName: String = "JAX-RS"
 
+    override suspend fun isEnabled(): Boolean {
+        val settings = SettingBinder.getInstance(project).read()
+        val availabilityService = ProjectClassAvailabilityService.getInstance(project)
+        return settings.jaxrsEnable &&
+                availabilityService.hasAnyClassInProject(JaxRsResourceRecognizer.PATH_ANNOTATIONS)
+    }
+
     private val annotationHelper = UnifiedAnnotationHelper()
     private val engine = RuleEngine.getInstance(project)
-    private val recognizer = JaxRsResourceRecognizer(engine, jaxrsEnable)
+    private val recognizer = JaxRsResourceRecognizer(engine)
     private val methodResolver = JaxRsHttpMethodResolver(annotationHelper)
     private val pathResolver = JaxRsPathResolver(annotationHelper)
     private val parameterResolver = JaxRsParameterResolver(annotationHelper)
     private val contentTypeResolver = JaxRsContentTypeResolver(annotationHelper)
-    private val docHelper = UnifiedDocHelper.getInstance(project)
-    private val metadataResolver = ApiMetadataResolver(engine, docHelper)
+    private val metadataResolver = DocMetadataResolver.getInstance(project)
     private val endpointBuilder = EndpointBuilder.getInstance(project)
 
     override suspend fun export(psiClass: PsiClass): List<ApiEndpoint> {

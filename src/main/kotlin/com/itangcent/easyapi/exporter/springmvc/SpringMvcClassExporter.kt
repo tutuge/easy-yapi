@@ -13,8 +13,7 @@ import com.itangcent.easyapi.exporter.EndpointBuilder
 import com.itangcent.easyapi.exporter.model.*
 import com.itangcent.easyapi.logging.IdeaLog
 import com.itangcent.easyapi.psi.PsiClassHelper
-import com.itangcent.easyapi.psi.helper.ApiMetadataResolver
-import com.itangcent.easyapi.psi.helper.UnifiedDocHelper
+import com.itangcent.easyapi.psi.helper.DocMetadataResolver
 import com.itangcent.easyapi.psi.helper.UnifiedAnnotationHelper
 import com.itangcent.easyapi.psi.model.FieldModel
 import com.itangcent.easyapi.psi.model.ObjectModel
@@ -27,6 +26,7 @@ import com.itangcent.easyapi.rule.RuleKeys
 import com.itangcent.easyapi.rule.engine.RuleEngine
 import com.itangcent.easyapi.settings.SettingBinder
 import com.itangcent.easyapi.util.PathVariablePattern
+import com.itangcent.easyapi.util.ide.ProjectClassAvailabilityService
 import kotlinx.coroutines.withContext
 
 /**
@@ -57,14 +57,18 @@ class SpringMvcClassExporter(
 
     override val frameworkName: String = "SpringMVC"
 
+    override suspend fun isEnabled(): Boolean {
+        val settings = SettingBinder.getInstance(project).read()
+        val availabilityService = ProjectClassAvailabilityService.getInstance(project)
+        return availabilityService.hasAnyClassInProject(SpringControllerRecognizer.CONTROLLER_ANNOTATIONS)
+    }
+
     private val annotationHelper = UnifiedAnnotationHelper()
     private val engine = RuleEngine.getInstance(project)
     private val controllerRecognizer = SpringControllerRecognizer(engine)
     private val mappingResolver = RequestMappingResolver(annotationHelper, engine)
     private val bindingResolver = SpringParameterBindingResolver(annotationHelper, engine)
-    private val docHelper = UnifiedDocHelper.getInstance(project)
-    private val settings by lazy { SettingBinder.getInstance(project).read() }
-    private val metadataResolver by lazy { ApiMetadataResolver(engine, docHelper, settings) }
+    private val metadataResolver get() = DocMetadataResolver.getInstance(project)
     private val endpointBuilder = EndpointBuilder.getInstance(project)
 
     override suspend fun export(psiClass: PsiClass): List<ApiEndpoint> {
